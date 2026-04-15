@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Room Controller</title>
+    <title>Light Thing</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 shape-rendering=%22crispEdges%22><path fill=%22%23FDE047%22 d=%22M6 1h4v1H6zM5 2h6v1H5zM4 3h8v5h-1v1h-1v1H6V9H5V8H4z%22/><path fill=%22%2394A3B8%22 d=%22M6 11h4v1H6zM6 13h4v1H6z%22/><path fill=%22%2364748B%22 d=%22M6 12h4v1H6zM7 14h2v1H7z%22/></svg>">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
     <style>
         :root {
@@ -51,32 +52,22 @@
             text-align: center;
         }
 
-        /* Large Reactive Indicator */
         .status-ring {
-            width: 120px;
-            height: 120px;
+            width: 100px;
+            height: 100px;
             border-radius: 50%;
-            margin: 0 auto 30px;
+            margin: 0 auto 25px;
             border: 4px solid #1e293b;
             display: flex;
             justify-content: center;
             align-items: center;
             transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
         }
 
         .status-ring.on {
             border-color: var(--on);
-            box-shadow: 0 0 30px rgba(74, 222, 128, 0.3), inset 0 0 20px rgba(74, 222, 128, 0.2);
+            box-shadow: 0 0 30px rgba(74, 222, 128, 0.3);
         }
-
-        .status-ring i {
-            font-size: 2rem;
-            color: #1e293b;
-            transition: color 0.5s ease;
-        }
-
-        .status-ring.on i { color: var(--on); }
 
         .controls-grid {
             display: grid;
@@ -117,7 +108,7 @@
             display: block;
             font-size: 0.7rem;
             color: #64748b;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
             text-transform: uppercase;
             letter-spacing: 1.5px;
         }
@@ -128,13 +119,28 @@
             cursor: pointer;
         }
 
-        input[type="color"] {
+        /* Color Preset Grid */
+        .color-presets {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-top: 10px;
+        }
+
+        .swatch {
             width: 100%;
-            height: 40px;
-            border: none;
-            border-radius: 10px;
-            background: none;
+            aspect-ratio: 1;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.1);
             cursor: pointer;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .swatch:hover { transform: scale(1.1); }
+        .swatch.selected { border-color: white; border-width: 3px; }
+
+        .swatch-custom {
+            background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red);
         }
 
         .broker-status {
@@ -148,7 +154,6 @@
 <body>
 
 <div class="container">
-    <h1>LIGHT THING</h1>
     <div class="card">
         <div id="status-ring" class="status-ring">
             <div id="status-text" style="font-size: 0.7rem; font-weight: bold; color: #475569;">OFF</div>
@@ -167,12 +172,17 @@
 
         <div class="slider-group">
             <label>Mood Color</label>
-            <div style="display: flex; align-items: center; gap: 15px;">
-                <div id="color-preview" onclick="document.getElementById('color').click()" 
-                     style="width: 50px; height: 50px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.1); cursor: pointer; background: #ffffff; transition: transform 0.2s ease;">
+            <div class="color-presets">
+                <div class="swatch" style="background: #ff0000" onclick="setSwatch('#ff0000', this)"></div>
+                <div class="swatch" style="background: #ffa500" onclick="setSwatch('#ffa500', this)"></div>
+                <div class="swatch" style="background: #ffff00" onclick="setSwatch('#ffff00', this)"></div>
+                <div class="swatch" style="background: #00ff00" onclick="setSwatch('#00ff00', this)"></div>
+                <div class="swatch" style="background: #00ffff" onclick="setSwatch('#00ffff', this)"></div>
+                <div class="swatch" style="background: #0000ff" onclick="setSwatch('#0000ff', this)"></div>
+                <div class="swatch" style="background: #ff00ff" onclick="setSwatch('#ff00ff', this)"></div>
+                <div class="swatch swatch-custom" onclick="document.getElementById('custom-color').click()">
+                    <input type="color" id="custom-color" style="display: none;" onchange="setSwatch(this.value, this.parentElement)">
                 </div>
-                <div style="font-size: 0.7rem; color: #475569;">TAP CIRCLE TO PICK</div>
-                <input type="color" id="color" value="#ffffff" style="display: none;" onchange="document.getElementById('color-preview').style.background = this.value">
             </div>
         </div>
 
@@ -187,7 +197,9 @@
     const TOPIC_STATUS = "adam/lights/candle_controller/status";
     const BROKER = "wss://broker.hivemq.com:8884/mqtt"; 
 
+    let selectedColor = "#ffffff";
     const client = mqtt.connect(BROKER);
+    
     const ring = document.getElementById('status-ring');
     const statusText = document.getElementById('status-text');
     const brokerStatus = document.getElementById('broker-status');
@@ -204,7 +216,7 @@
             const data = JSON.parse(message.toString());
             if (data.room_state === 'on') {
                 ring.classList.add('on');
-                statusText.innerText = "ACTIVE";
+                statusText.innerText = "ON";
                 statusText.style.color = "#4ade80";
             } else {
                 ring.classList.remove('on');
@@ -214,18 +226,24 @@
         }
     });
 
+    function setSwatch(hex, element) {
+        selectedColor = hex;
+        // Remove selection from others
+        document.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected'));
+        // Add to this one
+        element.classList.add('selected');
+    }
+
     function sendCommand(action) {
         client.publish(TOPIC_CMD, JSON.stringify({ target: "all", action: action }));
     }
 
     function applySettings() {
         const brightness = document.getElementById('brightness').value;
-        const color = document.getElementById('color').value;
         
-        // Send both commands
         client.publish(TOPIC_CMD, JSON.stringify({ target: "all", action: "brightness", value: brightness }));
         setTimeout(() => {
-            client.publish(TOPIC_CMD, JSON.stringify({ target: "all", action: "color", value: color }));
+            client.publish(TOPIC_CMD, JSON.stringify({ target: "all", action: "color", value: selectedColor }));
         }, 200);
     }
 </script>
