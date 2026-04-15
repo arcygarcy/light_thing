@@ -122,8 +122,8 @@
         /* Color Preset Grid */
         .color-presets {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 12px;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 8px;
             margin-top: 10px;
         }
 
@@ -133,14 +133,17 @@
             border-radius: 50%;
             border: 2px solid rgba(255,255,255,0.1);
             cursor: pointer;
-            transition: transform 0.2s ease, border-color 0.2s ease;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            box-sizing: border-box;
         }
 
-        .swatch:hover { transform: scale(1.1); }
-        .swatch.selected { border-color: white; border-width: 3px; }
+        .swatch.selected { 
+            border-color: white; 
+            box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px white;
+        }
 
         .swatch-custom {
-            background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red);
+            background: conic-gradient(from 0deg, red, yellow, lime, aqua, blue, magenta, red);
         }
 
         .broker-status {
@@ -180,8 +183,8 @@
                 <div class="swatch" style="background: #00ffff" onclick="setSwatch('#00ffff', this)"></div>
                 <div class="swatch" style="background: #0000ff" onclick="setSwatch('#0000ff', this)"></div>
                 <div class="swatch" style="background: #ff00ff" onclick="setSwatch('#ff00ff', this)"></div>
-                <div class="swatch swatch-custom" onclick="document.getElementById('custom-color').click()">
-                    <input type="color" id="custom-color" style="display: none;" onchange="setSwatch(this.value, this.parentElement)">
+                <div class="swatch swatch-custom" onclick="openPicker(event)">
+                    <input type="color" id="custom-color" style="position: fixed; visibility: hidden; opacity: 0; pointer-events: none;" onchange="setSwatch(this.value, this.parentElement)">
                 </div>
             </div>
         </div>
@@ -204,8 +207,22 @@
     const statusText = document.getElementById('status-text');
     const brokerStatus = document.getElementById('broker-status');
 
+    function openPicker(e) {
+        const picker = document.getElementById('custom-color');
+        // Move the hidden input to where the mouse clicked
+        picker.style.top = e.clientY + 'px';
+        picker.style.left = e.clientX + 'px';
+        
+        // Some browsers support showPicker(), otherwise use click()
+        if (picker.showPicker) {
+            picker.showPicker();
+        } else {
+            picker.click();
+        }
+    }
+
     client.on('connect', () => {
-        brokerStatus.innerText = "CONNECTED TO CLOUD";
+        brokerStatus.innerText = "CONNECTED";
         brokerStatus.style.color = "#4ade80";
         client.subscribe(TOPIC_STATUS);
         client.publish(TOPIC_CMD, JSON.stringify({ action: "status" }));
