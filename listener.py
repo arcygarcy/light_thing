@@ -12,6 +12,7 @@ if not os.path.exists(CONFIG_FILE):
     print(f"Error: {CONFIG_FILE} not found. Please create it first.")
     exit(1)
 
+print("Loading configuration...")
 with open(CONFIG_FILE, "r") as f:
     config = json.load(f)
 
@@ -35,37 +36,6 @@ def hex_to_rgb(hex_color):
     hex_color = hex_color.lstrip('#')
     return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
-def get_light_status(name):
-    try:
-        d = devices[name]
-        status = d.status()
-        if status and 'dps' in status:
-            dps = status['dps']
-            is_on = dps.get('20', False)
-            brightness = dps.get('22', 0)
-            mode = dps.get('21', 'white')
-            return {
-                "name": name,
-                "state": "on" if is_on else "off",
-                "brightness": int(brightness / 10) if brightness else 0,
-                "mode": mode
-            }
-    except Exception:
-        pass
-    return None
-
-def publish_all_status(client):
-    for name in devices:
-        status = get_light_status(name)
-        if status:
-            client.publish(STATUS_TOPIC, json.dumps(status))
-        time.sleep(0.5)
-
-def status_polling_loop(client):
-    while True:
-        time.sleep(60)
-        publish_all_status(client)
-
 def toggle_light(name, action, value=None):
     try:
         d = devices[name]
@@ -75,20 +45,57 @@ def toggle_light(name, action, value=None):
             d.set_brightness(int(value) * 10)
         elif action == "color":
             r, g, b = hex_to_rgb(value)
-            d.set_mode('colour') # Force color mode
+            d.set_mode('colour') 
             d.set_colour(r, g, b)
-        elif action == "reset":
-            d.turn_on()
+        elif action == "white":
             d.set_mode('white')
             d.set_brightness(1000)
-            d.set_colourtemp(0) # 0 is warm white
+        elif action == "reset":
+            d.turn_on()
+            time.sleep(0.1)
+            d.set_mode('white')
+            time.sleep(0.1)
+            d.set_brightness(1000)
+            d.set_colourtemp(300) # ~1000K cooler than 0 (Warm)
         print(f"  [CMD] {name} -> {action}")
     except Exception as e:
         print(f"  [CMD] Error on {name}: {e}")
 
+def get_light_status(name):
+    try:
+        d = devices[name]
+        status = d.status()
+        if status and 'dps' in status:
+            dps = status['dps']
+            return {
+                "name": name,
+                "state": "on" if dps.get('20', False) else "off",
+                "brightness": int(dps.get('22', 0) / 10),
+                "mode": dps.get('21', 'white')
+            }
+    except: pass
+    return None
+
+def publish_all_status(client):
+    results = []
+    for name in devices:
+        status = get_light_status(name)
+        if status: results.append(status)
+    
+    if results:
+        # Send room-level summary
+        is_on = any(r['state'] == 'on' for r in results)
+        summary = {
+            "room_state": "on" if is_on else "off",
+            "devices": results
+        }
+        client.publish(STATUS_TOPIC, json.dumps(summary))
+        print(f"  [STATUS] Room is {summary['room_state']}")
+
 def on_connect(client, userdata, flags, rc, properties=None):
-    client.subscribe(MQTT_TOPIC)
-    threading.Thread(target=publish_all_status, args=(client,)).start()
+    if rc == 0:
+        client.subscribe(MQTT_TOPIC)
+        threading.Thread(target=publish_all_status, args=(client,), daemon=True).start()
 
 def on_message(client, userdata, msg):
     try:
@@ -98,12 +105,16 @@ def on_message(client, userdata, msg):
         value = payload.get("value")
 
         if action == "status":
-            threading.Thread(target=publish_all_status, args=(client,)).start()
+            threading.Thread(target=publish_all_status, args=(client,), daemon=True).start()
             return
         
         targets = list(devices.keys()) if target == "all" else [target]
         for name in targets:
-            threading.Thread(target=toggle_light, args=(name, action, value)).start()
+            threading.Thread(target=toggle_light, args=(name, action, value), daemon=True).start()
+        
+        # Auto-refresh status after a command
+        time.sleep(1)
+        threading.Thread(target=publish_all_status, args=(client,), daemon=True).start()
             
     except Exception as e:
         print(f"Error: {e}")
@@ -112,5 +123,12 @@ client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 client.on_connect = on_connect
 client.on_message = on_message
 client.connect(MQTT_BROKER, MQTT_PORT, 60)
-threading.Thread(target=status_polling_loop, args=(client,), daemon=True).start()
+
+def poll_loop():
+    while True:
+        time.sleep(30) # Refresh status every 30 seconds
+        publish_all_status(client)
+
+threading.Thread(target=poll_loop, daemon=True).start()
+print("Starting Listener (Room Mode)...")
 client.loop_forever()
