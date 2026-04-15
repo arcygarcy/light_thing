@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Candle Controller</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: rgba(30, 41, 59, 0.7);
+            --accent: #38bdf8;
+            --text: #f8fafc;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: radial-gradient(circle at top right, #1e293b, #0f172a);
+        }
+
+        .container {
+            width: 100%;
+            max-width: 400px;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            font-weight: 300;
+            letter-spacing: 2px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: var(--card);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+
+        .status {
+            text-align: center;
+            font-size: 0.8rem;
+            margin-bottom: 20px;
+            color: #94a3b8;
+        }
+
+        .status.connected { color: #4ade80; }
+        .status.disconnected { color: #f87171; }
+
+        .btn {
+            width: 100%;
+            padding: 16px;
+            margin: 8px 0;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-on { background: #0ea5e9; color: white; }
+        .btn-on:active { transform: scale(0.98); background: #0284c7; }
+
+        .btn-off { background: #334155; color: #cbd5e1; }
+        .btn-off:active { transform: scale(0.98); background: #1e293b; }
+
+        .divider {
+            height: 1px;
+            background: rgba(255,255,255,0.1);
+            margin: 20px 0;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .individual-label {
+            grid-column: span 2;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #64748b;
+            margin-top: 10px;
+        }
+
+        #console {
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 0.7rem;
+            color: #64748b;
+            max-height: 100px;
+            overflow-y: auto;
+            background: rgba(0,0,0,0.2);
+            padding: 10px;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>CANDLES</h1>
+    <div class="card">
+        <div id="status" class="status disconnected">Connecting to Broker...</div>
+        
+        <button class="btn btn-on" onclick="sendCommand('all', 'on')">
+            POWER ON ALL
+        </button>
+        <button class="btn btn-off" onclick="sendCommand('all', 'off')">
+            POWER OFF ALL
+        </button>
+
+        <div class="divider"></div>
+
+        <div class="grid">
+            <div class="individual-label">Individual Control</div>
+            
+            <button class="btn btn-on" style="padding: 12px; font-size: 0.8rem;" onclick="sendCommand('candle_1', 'on')">C1 ON</button>
+            <button class="btn btn-off" style="padding: 12px; font-size: 0.8rem;" onclick="sendCommand('candle_1', 'off')">C1 OFF</button>
+            
+            <button class="btn btn-on" style="padding: 12px; font-size: 0.8rem;" onclick="sendCommand('candle_2', 'on')">C2 ON</button>
+            <button class="btn btn-off" style="padding: 12px; font-size: 0.8rem;" onclick="sendCommand('candle_2', 'off')">C2 OFF</button>
+            
+            <button class="btn btn-on" style="padding: 12px; font-size: 0.8rem;" onclick="sendCommand('candle_3', 'on')">C3 ON</button>
+            <button class="btn btn-off" style="padding: 12px; font-size: 0.8rem;" onclick="sendCommand('candle_3', 'off')">C3 OFF</button>
+        </div>
+
+        <div id="console">Log: Dashboard initialized.</div>
+    </div>
+</div>
+
+<script>
+    const TOPIC = "adam/lights/candle_controller/cmd";
+    // Updated to port 8884 for TLS WebSockets
+    const BROKER = "wss://broker.hivemq.com:8884/mqtt"; 
+
+    const statusEl = document.getElementById('status');
+    const consoleEl = document.getElementById('console');
+
+    function log(msg) {
+        consoleEl.innerHTML += `<br>> ${msg}`;
+        consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+
+    log(`Connecting to ${BROKER}...`);
+    const client = mqtt.connect(BROKER);
+
+    client.on('connect', () => {
+        statusEl.innerText = "CONNECTED";
+        statusEl.className = "status connected";
+        log("Connected successfully.");
+    });
+
+    client.on('error', (err) => {
+        log(`Error: ${err.message}`);
+    });
+
+    client.on('close', () => {
+        statusEl.innerText = "DISCONNECTED";
+        statusEl.className = "status disconnected";
+        log("Connection closed.");
+    });
+
+    function sendCommand(target, action) {
+        const payload = JSON.stringify({ target, action });
+        client.publish(TOPIC, payload, { qos: 1 });
+        log(`Sent: ${target} -> ${action}`);
+    }
+</script>
+
+</body>
+</html>

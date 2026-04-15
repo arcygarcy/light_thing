@@ -1,0 +1,11 @@
+# Environment and Python
+venv/
+__pycache__/
+*.pyc
+
+# Private Configuration (DO NOT COMMIT)
+config.json
+
+# Local / OS
+.env
+.DS_Store
