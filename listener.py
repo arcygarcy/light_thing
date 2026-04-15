@@ -15,7 +15,7 @@ if not os.path.exists(CONFIG_FILE):
 with open(CONFIG_FILE, "r") as f:
     config = json.load(f)
 
-CANDLE_LIGHTS = config["LIGHTS"]
+CANDLE_LIGHTS_CONFIG = config["LIGHTS"]
 MQTT_TOPIC = config["MQTT_TOPIC"]
 STATUS_TOPIC = config.get("STATUS_TOPIC", "adam/lights/candle_controller/status")
 
@@ -23,91 +23,76 @@ STATUS_TOPIC = config.get("STATUS_TOPIC", "adam/lights/candle_controller/status"
 MQTT_BROKER = "broker.hivemq.com"
 MQTT_PORT = 1883
 
+# --- PERSISTENT DEVICE OBJECTS ---
+devices = {}
+for name, cfg in CANDLE_LIGHTS_CONFIG.items():
+    d = tinytuya.BulbDevice(dev_id=cfg['id'], address=cfg['ip'], local_key=cfg['key'], version=cfg['version'])
+    d.set_socketTimeout(3)
+    d.set_socketRetryLimit(1)
+    devices[name] = d
+
 def hex_to_rgb(hex_color):
     hex_color = hex_color.lstrip('#')
     return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
-def get_light_status(name, light_data):
+def get_light_status(name):
     try:
-        d = tinytuya.BulbDevice(
-            dev_id=light_data['id'], 
-            address=light_data['ip'], 
-            local_key=light_data['key'], 
-            version=light_data['version']
-        )
-        d.set_socketTimeout(3)
+        d = devices[name]
         status = d.status()
         if status and 'dps' in status:
             dps = status['dps']
-            # DP 20: Power, 21: Mode, 22: Brightness, 24: Color
             is_on = dps.get('20', False)
             brightness = dps.get('22', 0)
-            color_mode = dps.get('21', 'white')
-            
+            mode = dps.get('21', 'white')
             return {
                 "name": name,
                 "state": "on" if is_on else "off",
                 "brightness": int(brightness / 10) if brightness else 0,
-                "mode": color_mode
+                "mode": mode
             }
-    except Exception as e:
-        print(f"  [STATUS] FAILED: {name} error: {e}")
+    except Exception:
+        pass
     return None
 
 def publish_all_status(client):
-    print("  [STATUS] Polling all lights...")
-    for name, data in CANDLE_LIGHTS.items():
-        status = get_light_status(name, data)
+    for name in devices:
+        status = get_light_status(name)
         if status:
             client.publish(STATUS_TOPIC, json.dumps(status))
-            print(f"  [STATUS] Published status for {name}")
+        time.sleep(0.5)
 
 def status_polling_loop(client):
     while True:
+        time.sleep(60)
         publish_all_status(client)
-        time.sleep(60) # Poll every minute
 
-def toggle_light(name, light_data, action, value=None):
+def toggle_light(name, action, value=None):
     try:
-        d = tinytuya.BulbDevice(
-            dev_id=light_data['id'], 
-            address=light_data['ip'], 
-            local_key=light_data['key'], 
-            version=light_data['version']
-        )
-        d.set_socketTimeout(3)
-        
-        status = None
-        if action == "on":
-            status = d.turn_on()
-        elif action == "off":
-            status = d.turn_off()
+        d = devices[name]
+        if action == "on": d.turn_on()
+        elif action == "off": d.turn_off()
         elif action == "brightness":
-            val = int(value) * 10
-            status = d.set_brightness(val)
+            d.set_brightness(int(value) * 10)
         elif action == "color":
             r, g, b = hex_to_rgb(value)
-            status = d.set_colour(r, g, b)
-        
-        if status and 'Error' not in str(status):
-            print(f"  [PARALLEL] SUCCESS: {name} -> {action} {value if value else ''}")
-        else:
-            print(f"  [PARALLEL] FAILED: {name} returned error: {status}")
-    except Exception as light_err:
-        print(f"  [PARALLEL] FAILED: {name} error: {light_err}")
+            d.set_mode('colour') # Force color mode
+            d.set_colour(r, g, b)
+        elif action == "reset":
+            d.turn_on()
+            d.set_mode('white')
+            d.set_brightness(1000)
+            d.set_colourtemp(0) # 0 is warm white
+        print(f"  [CMD] {name} -> {action}")
+    except Exception as e:
+        print(f"  [CMD] Error on {name}: {e}")
 
 def on_connect(client, userdata, flags, rc, properties=None):
-    print(f"Connected to MQTT Broker with result code {rc}")
     client.subscribe(MQTT_TOPIC)
-    print(f"Subscribed to: {MQTT_TOPIC}")
-    # Initial status sync
     threading.Thread(target=publish_all_status, args=(client,)).start()
 
 def on_message(client, userdata, msg):
     try:
         payload = json.loads(msg.payload.decode())
-        print(f"\n--- Command Received: {payload} ---")
-        
         action = payload.get("action")
         target = payload.get("target", "all")
         value = payload.get("value")
@@ -116,29 +101,16 @@ def on_message(client, userdata, msg):
             threading.Thread(target=publish_all_status, args=(client,)).start()
             return
         
-        lights_to_toggle = []
-        if target == "all":
-            lights_to_toggle = list(CANDLE_LIGHTS.items())
-        elif target in CANDLE_LIGHTS:
-            lights_to_toggle = [(target, CANDLE_LIGHTS[target])]
-            
-        for name, light_data in lights_to_toggle:
-            t = threading.Thread(target=toggle_light, args=(name, light_data, action, value))
-            t.start()
+        targets = list(devices.keys()) if target == "all" else [target]
+        for name in targets:
+            threading.Thread(target=toggle_light, args=(name, action, value)).start()
             
     except Exception as e:
-        print(f"Error processing message: {e}")
+        print(f"Error: {e}")
 
-# Setup MQTT Client
 client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 client.on_connect = on_connect
 client.on_message = on_message
-
-print("Starting Light Listener (Full Control Mode)...")
 client.connect(MQTT_BROKER, MQTT_PORT, 60)
-
-# Start background status polling
-poll_thread = threading.Thread(target=status_polling_loop, args=(client,), daemon=True)
-poll_thread.start()
-
+threading.Thread(target=status_polling_loop, args=(client,), daemon=True).start()
 client.loop_forever()
