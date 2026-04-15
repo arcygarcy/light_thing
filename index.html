@@ -131,15 +131,15 @@
             width: 100%;
             aspect-ratio: 1;
             border-radius: 50%;
-            border: 2px solid rgba(255,255,255,0.1);
+            border: none;
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1);
             cursor: pointer;
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            transition: box-shadow 0.2s ease;
             box-sizing: border-box;
         }
 
         .swatch.selected { 
-            border-color: white; 
-            box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px white;
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1), 0 0 0 2px var(--bg), 0 0 0 4px white;
         }
 
         .swatch-custom {
