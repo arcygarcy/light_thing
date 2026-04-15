@@ -148,7 +148,7 @@
 <body>
 
 <div class="container">
-    <h1>LIVING ROOM</h1>
+    <h1>LIGHT THING</h1>
     <div class="card">
         <div id="status-ring" class="status-ring">
             <div id="status-text" style="font-size: 0.7rem; font-weight: bold; color: #475569;">OFF</div>
@@ -167,7 +167,13 @@
 
         <div class="slider-group">
             <label>Mood Color</label>
-            <input type="color" id="color" value="#ffffff">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <div id="color-preview" onclick="document.getElementById('color').click()" 
+                     style="width: 50px; height: 50px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.1); cursor: pointer; background: #ffffff; transition: transform 0.2s ease;">
+                </div>
+                <div style="font-size: 0.7rem; color: #475569;">TAP CIRCLE TO PICK</div>
+                <input type="color" id="color" value="#ffffff" style="display: none;" onchange="document.getElementById('color-preview').style.background = this.value">
+            </div>
         </div>
 
         <button class="btn btn-apply" onclick="applySettings()">APPLY SETTINGS</button>
