@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Candle Controller</title>
+    <title>Candle Controller Pro</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mqtt/4.3.7/mqtt.min.js"></script>
     <style>
         :root {
@@ -11,6 +11,8 @@
             --card: rgba(30, 41, 59, 0.7);
             --accent: #38bdf8;
             --text: #f8fafc;
+            --on: #4ade80;
+            --off: #f87171;
         }
 
         body {
@@ -27,89 +29,153 @@
 
         .container {
             width: 100%;
-            max-width: 400px;
+            max-width: 450px;
             padding: 20px;
         }
 
         h1 {
             text-align: center;
             font-weight: 300;
-            letter-spacing: 2px;
-            margin-bottom: 30px;
+            letter-spacing: 4px;
+            margin-bottom: 20px;
         }
 
         .card {
             background: var(--card);
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(15px);
             border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 20px;
+            border-radius: 24px;
             padding: 24px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.4);
         }
 
-        .status {
-            text-align: center;
-            font-size: 0.8rem;
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        .status-connected { background: var(--on); box-shadow: 0 0 10px var(--on); }
+        .status-disconnected { background: var(--off); box-shadow: 0 0 10px var(--off); }
+
+        .header-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 20px;
+            font-size: 0.8rem;
             color: #94a3b8;
         }
 
-        .status.connected { color: #4ade80; }
-        .status.disconnected { color: #f87171; }
+        .master-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
 
         .btn {
-            width: 100%;
-            padding: 16px;
-            margin: 8px 0;
+            padding: 14px;
             border: none;
             border-radius: 12px;
-            font-size: 1rem;
+            font-size: 0.9rem;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s ease;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         .btn-on { background: #0ea5e9; color: white; }
-        .btn-on:active { transform: scale(0.98); background: #0284c7; }
-
+        .btn-on:hover { background: #38bdf8; }
         .btn-off { background: #334155; color: #cbd5e1; }
-        .btn-off:active { transform: scale(0.98); background: #1e293b; }
+        .btn-off:hover { background: #475569; }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+        }
+
+        input[type="color"] {
+            width: 100%;
+            height: 40px;
+            border: none;
+            border-radius: 8px;
+            background: none;
+            cursor: pointer;
+        }
 
         .divider {
             height: 1px;
             background: rgba(255,255,255,0.1);
-            margin: 20px 0;
+            margin: 24px 0;
         }
 
-        .grid {
+        .light-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
         }
 
-        .individual-label {
-            grid-column: span 2;
-            font-size: 0.8rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: #64748b;
-            margin-top: 10px;
+        .light-item {
+            text-align: center;
+            background: rgba(255,255,255,0.05);
+            padding: 15px 10px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .light-item.active {
+            border-color: rgba(56, 189, 248, 0.5);
+            background: rgba(56, 189, 248, 0.1);
+        }
+
+        .light-name {
+            font-size: 0.7rem;
+            margin-bottom: 8px;
+            color: #94a3b8;
+        }
+
+        .indicator {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            margin: 0 auto 10px;
+            background: #1e293b;
+            border: 2px solid rgba(255,255,255,0.1);
+            transition: all 0.3s ease;
+        }
+
+        .indicator.on {
+            box-shadow: 0 0 15px currentColor;
+            background: currentColor;
         }
 
         #console {
             margin-top: 20px;
-            font-family: monospace;
-            font-size: 0.7rem;
-            color: #64748b;
-            max-height: 100px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.65rem;
+            color: #475569;
+            max-height: 80px;
             overflow-y: auto;
             background: rgba(0,0,0,0.2);
             padding: 10px;
-            border-radius: 10px;
+            border-radius: 12px;
         }
     </style>
 </head>
@@ -118,54 +184,78 @@
 <div class="container">
     <h1>CANDLES</h1>
     <div class="card">
-        <div id="status" class="status disconnected">Connecting to Broker...</div>
-        
-        <button class="btn btn-on" onclick="sendCommand('all', 'on')">
-            POWER ON ALL
-        </button>
-        <button class="btn btn-off" onclick="sendCommand('all', 'off')">
-            POWER OFF ALL
-        </button>
+        <div class="header-info">
+            <div><span id="status-dot" class="status-dot status-disconnected"></span><span id="status-text">DISCONNECTED</span></div>
+            <div id="last-update">--:--</div>
+        </div>
+
+        <div class="master-controls">
+            <button class="btn btn-on" onclick="sendCommand('all', 'on')">ALL ON</button>
+            <button class="btn btn-off" onclick="sendCommand('all', 'off')">ALL OFF</button>
+        </div>
+
+        <div class="control-group">
+            <label>Brightness</label>
+            <input type="range" id="brightness-slider" min="1" max="100" value="100" onchange="sendValue('all', 'brightness', this.value)">
+        </div>
+
+        <div class="control-group">
+            <label>Master Color</label>
+            <input type="color" id="color-picker" value="#ffffff" onchange="sendValue('all', 'color', this.value)">
+        </div>
 
         <div class="divider"></div>
 
-        <div class="grid">
-            <div class="individual-label">Individual Control</div>
-            
-            <button class="btn btn-on" style="padding: 12px; font-size: 0.8rem;" onclick="sendCommand('candle_1', 'on')">C1 ON</button>
-            <button class="btn btn-off" style="padding: 12px; font-size: 0.8rem;" onclick="sendCommand('candle_1', 'off')">C1 OFF</button>
-            
-            <button class="btn btn-on" style="padding: 12px; font-size: 0.8rem;" onclick="sendCommand('candle_2', 'on')">C2 ON</button>
-            <button class="btn btn-off" style="padding: 12px; font-size: 0.8rem;" onclick="sendCommand('candle_2', 'off')">C2 OFF</button>
-            
-            <button class="btn btn-on" style="padding: 12px; font-size: 0.8rem;" onclick="sendCommand('candle_3', 'on')">C3 ON</button>
-            <button class="btn btn-off" style="padding: 12px; font-size: 0.8rem;" onclick="sendCommand('candle_3', 'off')">C3 OFF</button>
+        <div class="light-grid">
+            <div id="candle_1_item" class="light-item" onclick="toggleLocal('candle_1')">
+                <div class="light-name">CANDLE 1</div>
+                <div id="candle_1_ind" class="indicator"></div>
+            </div>
+            <div id="candle_2_item" class="light-item" onclick="toggleLocal('candle_2')">
+                <div class="light-name">CANDLE 2</div>
+                <div id="candle_2_ind" class="indicator"></div>
+            </div>
+            <div id="candle_3_item" class="light-item" onclick="toggleLocal('candle_3')">
+                <div class="light-name">CANDLE 3</div>
+                <div id="candle_3_ind" class="indicator"></div>
+            </div>
         </div>
 
-        <div id="console">Log: Dashboard initialized.</div>
+        <div id="console">System initialized.</div>
     </div>
 </div>
 
 <script>
-    const TOPIC = "adam/lights/candle_controller/cmd";
-    // Updated to port 8884 for TLS WebSockets
+    const TOPIC_CMD = "adam/lights/candle_controller/cmd";
+    const TOPIC_STATUS = "adam/lights/candle_controller/status";
     const BROKER = "wss://broker.hivemq.com:8884/mqtt"; 
 
-    const statusEl = document.getElementById('status');
+    const lightState = {
+        candle_1: { state: 'off', brightness: 100, color: '#ffffff' },
+        candle_2: { state: 'off', brightness: 100, color: '#ffffff' },
+        candle_3: { state: 'off', brightness: 100, color: '#ffffff' }
+    };
+
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
     const consoleEl = document.getElementById('console');
+    const lastUpdateEl = document.getElementById('last-update');
 
     function log(msg) {
-        consoleEl.innerHTML += `<br>> ${msg}`;
-        consoleEl.scrollTop = consoleEl.scrollHeight;
+        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        consoleEl.innerHTML = `[${time}] ${msg}<br>` + consoleEl.innerHTML;
+        if (consoleEl.children.length > 20) consoleEl.removeChild(consoleEl.lastChild);
     }
 
-    log(`Connecting to ${BROKER}...`);
     const client = mqtt.connect(BROKER);
 
     client.on('connect', () => {
-        statusEl.innerText = "CONNECTED";
-        statusEl.className = "status connected";
-        log("Connected successfully.");
+        statusDot.className = "status-dot status-connected";
+        statusText.innerText = "CONNECTED";
+        log("Connected to broker.");
+        client.subscribe(TOPIC_STATUS);
+        // Request immediate status
+        sendCommand('all', 'status');
     });
 
     client.on('error', (err) => {
@@ -173,15 +263,57 @@
     });
 
     client.on('close', () => {
-        statusEl.innerText = "DISCONNECTED";
-        statusEl.className = "status disconnected";
+        statusDot.className = "status-dot status-disconnected";
+        statusText.innerText = "DISCONNECTED";
         log("Connection closed.");
     });
 
+    client.on('message', (topic, message) => {
+        if (topic === TOPIC_STATUS) {
+            const data = JSON.parse(message.toString());
+            updateUI(data);
+        }
+    });
+
+    function updateUI(data) {
+        const name = data.name;
+        if (!lightState[name]) return;
+
+        lightState[name].state = data.state;
+        lightState[name].brightness = data.brightness;
+        
+        const item = document.getElementById(`${name}_item`);
+        const ind = document.getElementById(`${name}_ind`);
+
+        if (data.state === 'on') {
+            item.classList.add('active');
+            ind.classList.add('on');
+            // If color is provided in future, we could set it here
+            ind.style.color = '#38bdf8'; 
+        } else {
+            item.classList.remove('active');
+            ind.classList.remove('on');
+            ind.style.color = '#1e293b';
+        }
+
+        lastUpdateEl.innerText = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
     function sendCommand(target, action) {
         const payload = JSON.stringify({ target, action });
-        client.publish(TOPIC, payload, { qos: 1 });
-        log(`Sent: ${target} -> ${action}`);
+        client.publish(TOPIC_CMD, payload, { qos: 1 });
+        log(`Command: ${target} -> ${action}`);
+    }
+
+    function sendValue(target, action, value) {
+        const payload = JSON.stringify({ target, action, value });
+        client.publish(TOPIC_CMD, payload, { qos: 1 });
+        log(`Update: ${target} ${action} = ${value}`);
+    }
+
+    function toggleLocal(name) {
+        const newAction = lightState[name].state === 'on' ? 'off' : 'on';
+        sendCommand(name, newAction);
     }
 </script>
 
