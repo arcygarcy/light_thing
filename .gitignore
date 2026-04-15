@@ -1,9 +1,10 @@
 # Environment and Python
 venv/
-__pycache__/
+**/__pycache__/
 *.pyc
 
 # Private Configuration (DO NOT COMMIT)
+listener/config.json
 config.json
 
 # Local / OS

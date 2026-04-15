@@ -1,13 +1,13 @@
-# 🕯️ Candle Controller
+# 🕯️ Light Thing
 
 A lightweight, parallel Tuya light controller using Python, MQTT, and a sleek web dashboard. This setup bypasses the official Tuya app for fast, local control while remaining accessible from anywhere via the web.
 
 ---
 
-## 🛠️ Components
+## 🛠️ Project Structure
 
-1.  **Dashboard (`index.html`)**: A dark-mode web UI that publishes commands to an MQTT broker via WebSockets.
-2.  **Listener (`listener.py`)**: A Python script running on a local device (like a Raspberry Pi) that listens for MQTT commands and toggles bulbs in parallel via `tinytuya`.
+- **`index.html`**: The frontend dashboard (Hosted on GitHub Pages).
+- **`/listener`**: The backend Python service that talks to your bulbs locally.
 
 ---
 
@@ -19,21 +19,7 @@ A lightweight, parallel Tuya light controller using Python, MQTT, and a sleek we
 *   `paho-mqtt`
 
 ### 2. Configuration (Local Only)
-Create a `config.json` file on your device (this file is ignored by Git to keep your keys safe):
-```json
-{
-    "MQTT_TOPIC": "your/secret/topic/here",
-    "LIGHTS": {
-        "candle_1": {
-            "id": "DEVICE_ID", 
-            "key": "LOCAL_KEY",
-            "ip": "192.168.4.x",
-            "version": 3.5
-        }
-    }
-}
-```
-*Use `config.example.json` as a blueprint.*
+Create a `config.json` file inside the `listener/` directory (this file is ignored by Git to keep your keys safe). Use `listener/config.example.json` as a blueprint.
 
 ### 3. Run the Listener
 On your Raspberry Pi or local server:
@@ -41,22 +27,27 @@ On your Raspberry Pi or local server:
 python3 -m venv venv
 source venv/bin/activate
 pip install tinytuya paho-mqtt
-python3 listener.py
+python3 listener/listener.py
 ```
 
 ### 4. Deploy the Dashboard
-*   Update the `TOPIC` in the `<script>` tag of `index.html` to match your `config.json`.
-*   Host `index.html` on **GitHub Pages**, **Netlify**, or your own domain.
-
----
-
-## 🔒 Security Note
-*   **Tuya Keys**: These are stored **locally** in `config.json` and never leave your local network.
-*   **MQTT Topic**: Use a long, random string for your `MQTT_TOPIC` to prevent unauthorized access, as the public broker (`broker.hivemq.com`) is visible to others.
+*   Update the `TOPIC_CMD` and `TOPIC_STATUS` in the `<script>` tag of `index.html` to match your `config.json`.
+*   Ensure the `CNAME` file contains your custom domain.
+*   Push to GitHub and enable GitHub Pages in the repository settings.
 
 ---
 
 ## 🚀 Features
-*   **Parallel Toggling**: Uses Python threading to turn all bulbs on/off simultaneously.
-*   **Zero Port Forwarding**: Uses outbound MQTT connections to bypass router firewalls.
-*   **Modern UI**: Glassmorphism design with mobile-first responsiveness.
+
+-   **Parallel Toggling**: Uses Python threading to turn all bulbs on/off simultaneously.
+-   **Modern UI**: Glassmorphism design with an 8-bit style bulb icon.
+-   **Color Grid**: 7 vibrant presets + 1 custom "Mood Ring" picker.
+-   **Apply Settings**: Queue up your brightness and color, then hit "Apply" to update the whole room.
+-   **Real-time Sync**: Large central status ring glows when the lights are confirmed to be ON.
+-   **Zero Port Forwarding**: Uses outbound MQTT connections to bypass router firewalls.
+
+---
+
+## 🔒 Security
+*   **Tuya Keys**: Stored locally in `listener/config.json`. Never commit this file.
+*   **MQTT Topic**: Use a long, random string for your MQTT topics to ensure only your dashboard can control your lights.

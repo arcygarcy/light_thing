@@ -5,8 +5,10 @@ import threading
 import os
 import time
 
-# --- LOAD CONFIG FROM FILE ---
-CONFIG_FILE = "config.json"
+# --- LOAD CONFIG FROM FILE (Robust Path) ---
+# This ensures it finds config.json even if run from the project root
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 
 if not os.path.exists(CONFIG_FILE):
     print(f"Error: {CONFIG_FILE} not found. Please create it first.")
@@ -56,7 +58,7 @@ def toggle_light(name, action, value=None):
             d.set_mode('white')
             time.sleep(0.1)
             d.set_brightness(1000)
-            d.set_colourtemp(300) # ~1000K cooler than 0 (Warm)
+            d.set_colourtemp(300) 
         print(f"  [CMD] {name} -> {action}")
     except Exception as e:
         print(f"  [CMD] Error on {name}: {e}")
@@ -83,14 +85,12 @@ def publish_all_status(client):
         if status: results.append(status)
     
     if results:
-        # Send room-level summary
         is_on = any(r['state'] == 'on' for r in results)
         summary = {
             "room_state": "on" if is_on else "off",
             "devices": results
         }
         client.publish(STATUS_TOPIC, json.dumps(summary))
-        print(f"  [STATUS] Room is {summary['room_state']}")
 
 def on_connect(client, userdata, flags, rc, properties=None):
     if rc == 0:
@@ -112,7 +112,6 @@ def on_message(client, userdata, msg):
         for name in targets:
             threading.Thread(target=toggle_light, args=(name, action, value), daemon=True).start()
         
-        # Auto-refresh status after a command
         time.sleep(1)
         threading.Thread(target=publish_all_status, args=(client,), daemon=True).start()
             
@@ -126,7 +125,7 @@ client.connect(MQTT_BROKER, MQTT_PORT, 60)
 
 def poll_loop():
     while True:
-        time.sleep(30) # Refresh status every 30 seconds
+        time.sleep(30) 
         publish_all_status(client)
 
 threading.Thread(target=poll_loop, daemon=True).start()
