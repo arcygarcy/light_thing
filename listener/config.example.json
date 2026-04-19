@@ -1,5 +1,9 @@
 {
     "MQTT_TOPIC": "your/unique/topic/here",
+    "STATUS_TOPIC": "your/unique/topic/status/here",
+    "LATITUDE": 37.7749,
+    "LONGITUDE": -122.4194,
+    "TIMEZONE": "America/Los_Angeles",
     "LIGHTS": {
         "candle_1": {
             "id": "DEVICE_ID_HERE", 

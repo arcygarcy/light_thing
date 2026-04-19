@@ -4,6 +4,9 @@ import json
 import threading
 import os
 import time
+import requests
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 # --- LOAD CONFIG FROM FILE (Robust Path) ---
 # This ensures it finds config.json even if run from the project root
@@ -21,6 +24,12 @@ with open(CONFIG_FILE, "r") as f:
 CANDLE_LIGHTS_CONFIG = config["LIGHTS"]
 MQTT_TOPIC = config["MQTT_TOPIC"]
 STATUS_TOPIC = config.get("STATUS_TOPIC", "adam/lights/candle_controller/status")
+
+# --- SCHEDULER CONFIG ---
+LATITUDE = config.get("LATITUDE")
+LONGITUDE = config.get("LONGITUDE")
+TIMEZONE = config.get("TIMEZONE", "America/Los_Angeles")
+TZ = ZoneInfo(TIMEZONE)
 
 # --- MQTT CONFIG ---
 MQTT_BROKER = "broker.hivemq.com"
@@ -123,11 +132,64 @@ client.on_connect = on_connect
 client.on_message = on_message
 client.connect(MQTT_BROKER, MQTT_PORT, 60)
 
+def get_sunset_time():
+    if not LATITUDE or not LONGITUDE:
+        return None
+    try:
+        url = f"https://api.sunrise-sunset.org/json?lat={LATITUDE}&lng={LONGITUDE}&formatted=0"
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        if data["status"] == "OK":
+            sunset_utc = data["results"]["sunset"]
+            dt_utc = datetime.fromisoformat(sunset_utc)
+            return dt_utc.astimezone(TZ)
+    except Exception as e:
+        print(f"Error fetching sunset: {e}")
+    return None
+
+def scheduler_loop():
+    print(f"Scheduler started. Location: {LATITUDE}, {LONGITUDE} ({TIMEZONE})")
+    last_off_date = None
+    last_on_date = None
+    
+    while True:
+        try:
+            now = datetime.now(TZ)
+            today = now.date()
+            
+            # --- OFF EVENT: 2:30 AM ---
+            if now.hour == 2 and now.minute == 30 and last_off_date != today:
+                print(f"Scheduled Event: Turning off lights (2:30 AM)")
+                for name in devices:
+                    threading.Thread(target=toggle_light, args=(name, "off"), daemon=True).start()
+                last_off_date = today
+                time.sleep(1)
+                publish_all_status(client)
+
+            # --- ON EVENT: 1 hour before sunset ---
+            sunset = get_sunset_time()
+            if sunset:
+                on_time = sunset - timedelta(hours=1)
+                # If we are within 2 minutes of the target time and haven't run today
+                if abs((now - on_time).total_seconds()) < 60 and last_on_date != today:
+                    print(f"Scheduled Event: Turning on lights (Sunset was {sunset.strftime('%H:%M')}, triggering at {on_time.strftime('%H:%M')})")
+                    for name in devices:
+                        threading.Thread(target=toggle_light, args=(name, "on"), daemon=True).start()
+                    last_on_date = today
+                    time.sleep(1)
+                    publish_all_status(client)
+            
+        except Exception as e:
+            print(f"Scheduler Error: {e}")
+        
+        time.sleep(30) 
+
 def poll_loop():
     while True:
         time.sleep(30) 
         publish_all_status(client)
 
+threading.Thread(target=scheduler_loop, daemon=True).start()
 threading.Thread(target=poll_loop, daemon=True).start()
 print("Starting Listener (Room Mode)...")
 client.loop_forever()

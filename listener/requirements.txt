@@ -1,0 +1,4 @@
+tinytuya
+paho-mqtt
+requests
+tzdata
